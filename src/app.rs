@@ -20,7 +20,9 @@ use cosmic::iced::{Alignment, Length, Rectangle, Subscription, window};
 use cosmic::widget::rectangle_tracker::{
     RectangleTracker, RectangleUpdate, rectangle_tracker_subscription,
 };
-use cosmic::widget::{Column, button, column, container, divider, icon, row, space, text};
+use cosmic::widget::{
+    Column, button, column, container, divider, icon, row, scrollable, space, text,
+};
 use cosmic::{Element, surface};
 
 use crate::fl;
@@ -36,8 +38,12 @@ const REFRESH_INTERVAL: Duration = Duration::from_secs(2);
 
 /// The popup's fixed width. 360 is what libcosmic gives applet popups by
 /// default; the height is left to autosize, since the board is a list that
-/// grows and shrinks with however many repos there are.
+/// grows and shrinks with however many repos there are - up to a cap.
 const POPUP_WIDTH: f32 = 360.0;
+
+/// How many repo rows the board shows before it starts scrolling. Keeps the
+/// popup manageable for someone with a folder full of repos.
+const VISIBLE_ROWS: f32 = 5.0;
 
 /// Which screen the popup is showing. The popup is a single surface that
 /// swaps between them, because an applet can't put a second real window on
@@ -346,9 +352,11 @@ impl AppModel {
     }
 
     /// The board: "Open" first - the repos with a shell in them, newest
-    /// first - then "Projects", everything else under the project folders,
-    /// then a divider and the way into Settings. Each repo row is a button
-    /// that opens a terminal there.
+    /// first - then "Projects", everything else under the project folders.
+    /// That list shows about VISIBLE_ROWS rows and scrolls for the rest, so
+    /// forty repos don't make a popup taller than the screen. Under it, pinned
+    /// so they're always reachable: a divider and the way into Settings.
+    /// Each repo row is a button that opens a terminal there.
     fn board_screen(&self) -> Element<'_, Message> {
         let spacing = cosmic::theme::spacing();
 
@@ -378,20 +386,32 @@ impl AppModel {
             );
         }
 
-        rows.push(
-            padded_control(divider::horizontal::default())
-                .padding([spacing.space_xxs, spacing.space_m])
-                .into(),
-        );
-        rows.push(
-            menu_button(text(fl!("settings")).size(14))
-                .on_press(Message::OpenSettings)
-                .into(),
-        );
+        // The cap is in pixels, worked out from what a row is made of at the
+        // current density: a 14pt title line and a 12pt detail line (iced
+        // draws text at 1.3x its size), the gap between them, and the menu
+        // button's padding above and below. Plus one section header's worth,
+        // so "Projects" and five of its rows fit without a scroll.
+        let row_height = 14.0 * 1.3
+            + 12.0 * 1.3
+            + f32::from(spacing.space_xxxs)
+            + 2.0 * f32::from(spacing.space_xxs);
+        let header_height = 12.0 * 1.3 + 2.0 * f32::from(spacing.space_xxs);
+        let list_max_height = VISIBLE_ROWS * row_height + header_height;
+
+        let list = container(scrollable(Column::with_children(rows).width(Length::Fill)))
+            .max_height(list_max_height);
+
+        let footer_divider = padded_control(divider::horizontal::default())
+            .padding([spacing.space_xxs, spacing.space_m]);
+        let settings_button =
+            menu_button(text(fl!("settings")).size(14)).on_press(Message::OpenSettings);
 
         // Rows carry their own horizontal padding (menu_button/padded_control),
         // so the column only pads top and bottom - the stock applets' layout.
-        Column::with_children(rows)
+        column::with_capacity(3)
+            .push(list)
+            .push(footer_divider)
+            .push(settings_button)
             .padding([8, 0])
             .width(Length::Fill)
             .into()
