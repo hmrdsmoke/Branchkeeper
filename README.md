@@ -26,15 +26,20 @@ You'll need Rust and the COSMIC development dependencies.
 
 Clone the repo, then run `make` for a debug build, or `make release` for a release build. Install with `sudo make install`, which puts the binary, desktop file, metainfo, and icon in place and updates the icon cache. Then open COSMIC Panel settings and add Branchkeeper to your panel.
 
-To check the git reads from a terminal without installing anything:
-
-```
-cargo run -- --status ~/Projects/some-repo ~/Projects/another
-```
-
-prints one line per repository. With no paths it runs the same scan the applet runs.
-
 To remove it, run `sudo make uninstall`.
+
+## Command line
+
+The same binary answers a few flags instead of starting the applet, so you — or another program — can read the board and open repos from a script:
+
+```
+branchkeeper --status [PATH ...]   # the board, human-readable (no paths = the scan)
+branchkeeper --scan                # every interactive shell it can see, newest first
+branchkeeper --json                # the board as JSON, for other programs
+branchkeeper --launch <name|path>  # open a terminal in a repo, by name or path
+```
+
+`--json` prints `{ "open": [...], "projects": [...] }`, each repo an object with `name`, `branch`, `ahead`, `behind` (both `null` when there's no upstream), `changed`, and `path`. `--launch soulless` opens a terminal in the repo named `soulless` on the board; it also takes a path, and exits non-zero if no such repo is found. These are what a desktop assistant can call to list your projects and open one on request.
 
 ## License
 
