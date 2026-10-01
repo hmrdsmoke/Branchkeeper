@@ -2,7 +2,7 @@
 
 Git branch and sync status for the COSMIC panel.
 
-Branchkeeper shows the git status of whatever repository you're working in. The panel shows one repo — the one you're in — as `soulless main ↑2`: the repo name, the checked-out branch, and how far ahead of or behind its upstream it is. Click it for the full board: every repository you currently have open, each with its branch, ahead/behind, and uncommitted changes.
+Branchkeeper shows the git status of whatever repository you're working in. The panel shows one repo — the one you're in — as `soulless main ↑2 ↓0`: the repo name, the checked-out branch, and how many commits it is ahead of (`↑`) and behind (`↓`) its upstream. Click it for the full board: the repositories you currently have a terminal in, then every other project in your project folders, each with its branch, ahead/behind, and uncommitted changes. Click any row to open a terminal in that repo.
 
 Panel is the headline, popup is the full board.
 
@@ -12,11 +12,13 @@ Branchkeeper doesn't ask you to point it at anything. It looks at where your she
 
 It reads this from `/proc`, which only shows your own processes: a root shell (`sudo -i`) is invisible to it. `branchkeeper --scan` lists exactly which shells it can see.
 
-Everything git-related is read with libgit2 — no `git` process is ever started.
+The rest of the board comes from your project folders: every folder one level down that has a `.git` is a project, open or not. Out of the box that's `~/Projects`. Settings, at the bottom of the popup, is where you add more — Add folder opens the system folder picker, and the repos in whatever you choose are on the board the next time you open it. Folders are saved with the rest of your COSMIC settings.
+
+Everything git-related is read with libgit2 — no `git` process is ever started. `↓` is only as fresh as your last `git fetch` or `git pull`; Branchkeeper never touches the network.
 
 ## Status
 
-Early. The git reads (branch, ahead/behind, change count) and the shell scan are in; the popup gets its polish next.
+Working. Git reads, the shell scan, the project list, terminal launching, and project-folder settings are in. The terminal it opens is `cosmic-term` (a constant in `src/launch.rs` if you use another).
 
 ## Building
 

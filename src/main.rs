@@ -16,11 +16,15 @@
 
 mod app;
 mod i18n;
+mod launch;
 mod repo;
 mod scan;
+mod settings;
 
 use std::path::PathBuf;
 use std::time::SystemTime;
+
+use repo::RepoStatus;
 
 fn main() -> cosmic::iced::Result {
     let mut args = std::env::args_os().skip(1);
@@ -47,38 +51,51 @@ fn main() -> cosmic::iced::Result {
 }
 
 /// Print the status of each given repository path, one per line, in the same
-/// shape the panel shows it. With no paths, run the same scan the applet runs
-/// (see `scan::snapshot`) and print whatever it finds - which is how the
-/// process scan gets checked from a terminal once it's wired up.
+/// shape the panel shows it. With no paths, build the same board the applet
+/// shows (see `scan::snapshot`) and print it section by section.
 fn status_report(paths: Vec<PathBuf>) {
-    let repos = if paths.is_empty() {
-        scan::snapshot()
-    } else {
-        paths
-            .iter()
-            .filter_map(|path| match repo::RepoStatus::read(path) {
-                Ok(status) => Some(status),
-                Err(why) => {
-                    eprintln!("branchkeeper: {}: {}", path.display(), why.message());
-                    None
-                }
-            })
-            .collect()
-    };
-
-    if repos.is_empty() {
-        println!("no open repositories");
+    if paths.is_empty() {
+        // The same folders the applet uses, from the saved settings.
+        let board = scan::snapshot(&settings::Settings::load().project_roots);
+        if board.is_empty() {
+            println!("no repositories found");
+            return;
+        }
+        println!("open:");
+        print_rows(&board.open);
+        println!("projects:");
+        print_rows(&board.projects);
         return;
     }
-    // Plain numbers here, not the applet's wording: this is the raw read-out
-    // for checking the git side, so nothing is hidden behind a label.
-    for status in &repos {
+
+    let repos: Vec<RepoStatus> = paths
+        .iter()
+        .filter_map(|path| match RepoStatus::read(path) {
+            Ok(status) => Some(status),
+            Err(why) => {
+                eprintln!("branchkeeper: {}: {}", path.display(), why.message());
+                None
+            }
+        })
+        .collect();
+    print_rows(&repos);
+}
+
+/// One line per repo. Plain numbers here, not the applet's wording: this is
+/// the raw read-out for checking the git side, so nothing is hidden behind a
+/// label. An empty section prints as a single "(none)".
+fn print_rows(repos: &[RepoStatus]) {
+    if repos.is_empty() {
+        println!("  (none)");
+        return;
+    }
+    for status in repos {
         let sync = match status.tracking {
             Some(tracking) => format!("↑{} ↓{}", tracking.ahead, tracking.behind),
             None => "no upstream".to_owned(),
         };
         println!(
-            "{:<40} {:<14} {} changed    {}",
+            "  {:<40} {:<14} {} changed    {}",
             status.headline(),
             sync,
             status.changed,

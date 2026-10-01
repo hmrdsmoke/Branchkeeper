@@ -45,6 +45,7 @@ cosmic = { git = "https://github.com/pop-os/libcosmic", rev = "fc5debccef41cd6bd
     "winit",
     "wgpu",
     "applet",
+    "xdg-portal",    # native folder picker (Settings › Add folder) via the desktop portal
 ] }
 
 # ── Git ──────────────────────────────────────────────────────────────────────

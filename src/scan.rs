@@ -1,5 +1,6 @@
-// Finding the repositories that are "open" right now - by looking at where
-// the user's shells are sitting.
+// Building the board: which repositories are "open" right now (by looking
+// at where the user's shells are sitting), plus every project under the
+// project roots whether it's open or not.
 //
 // The original design said "scan for terminals and file managers and read
 // their cwd". The scan ended up one level down from that, for a reason worth
@@ -35,6 +36,7 @@ use std::time::SystemTime;
 use git2::Repository;
 
 use crate::repo::RepoStatus;
+use crate::settings;
 
 /// Process names (`/proc/<pid>/comm`) that count as a shell. comm is the
 /// executable's base name, 15 characters max, so "bash" here matches a login
@@ -115,11 +117,74 @@ fn read_shell(pid: u32) -> Option<Shell> {
     })
 }
 
-/// Everything the UI needs, in the order the UI shows it: the repo whose
-/// shell was touched most recently first - that's the panel's headline -
-/// then the rest of the board, newest to oldest. The applet runs this on a
-/// background thread every refresh (see app.rs); `--status` runs it directly.
-pub fn snapshot() -> Vec<RepoStatus> {
+/// Everything the UI needs, already in the order the UI shows it.
+#[derive(Debug, Clone, Default)]
+pub struct Board {
+    /// Repos with a shell sitting in them, most recently touched first.
+    /// `open[0]` is the panel's headline.
+    pub open: Vec<RepoStatus>,
+    /// Every other project under the user's project folders (see
+    /// settings.rs), alphabetical. A project that is open lives in `open`,
+    /// not here, so nothing shows twice.
+    pub projects: Vec<RepoStatus>,
+}
+
+impl Board {
+    /// The repo the panel shows: the one touched last, if anything is open.
+    pub fn headline(&self) -> Option<&RepoStatus> {
+        self.open.first()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.open.is_empty() && self.projects.is_empty()
+    }
+}
+
+/// The whole board: the open repos from the shell scan, then every project
+/// under `roots` (the user's project folders, as stored in settings) that
+/// isn't already open. The applet runs this on a background thread every
+/// refresh (see app.rs); `--status` runs it directly.
+pub fn snapshot(roots: &[String]) -> Board {
+    let open = open_repos();
+
+    let mut projects: Vec<RepoStatus> = project_dirs(roots)
+        .into_iter()
+        .filter(|dir| !open.iter().any(|repo| &repo.workdir == dir))
+        .filter_map(|dir| RepoStatus::read(&dir).ok())
+        .collect();
+    projects.sort_by_key(|repo| repo.name.to_lowercase());
+
+    Board { open, projects }
+}
+
+/// Project directories under the given roots: one level down, `.git`
+/// present. Paths come back canonical (symlinks resolved) so they compare
+/// equal to the real paths /proc reports for the shells.
+pub fn project_dirs(roots: &[String]) -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+
+    for root in roots {
+        let root = settings::expand_root(root);
+        // A root that doesn't exist is simply empty, not an error.
+        let Ok(entries) = fs::read_dir(&root) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            // `.git` is a directory for a normal clone and a file for a
+            // linked worktree; either way it marks a project.
+            if !path.join(".git").exists() {
+                continue;
+            }
+            dirs.push(fs::canonicalize(&path).unwrap_or(path));
+        }
+    }
+
+    dirs
+}
+
+/// The repos that have a shell in them, most recently touched first.
+fn open_repos() -> Vec<RepoStatus> {
     let mut seen_gitdirs: Vec<PathBuf> = Vec::new();
     let mut repos: Vec<RepoStatus> = Vec::new();
 
