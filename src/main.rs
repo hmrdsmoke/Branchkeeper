@@ -15,6 +15,7 @@
 // starts normally.
 
 mod app;
+mod fetch;
 mod i18n;
 mod launch;
 mod repo;

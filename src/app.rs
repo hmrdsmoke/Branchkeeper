@@ -25,6 +25,7 @@ use cosmic::widget::{
 };
 use cosmic::{Element, surface};
 
+use crate::fetch;
 use crate::fl;
 use crate::launch;
 use crate::repo::RepoStatus;
@@ -75,6 +76,9 @@ pub struct AppModel {
     /// land during one are dropped rather than queued, so a slow read never
     /// piles up a backlog of reads behind it.
     refreshing: bool,
+    /// True while a "Fetch all" is running on the background thread. The
+    /// button reads this to show "Fetching…" and ignore further presses.
+    fetching: bool,
     /// Handle to the panel's rectangle tracker, delivered once at startup.
     rectangle_tracker: Option<RectangleTracker<u32>>,
     /// The panel button's true on-screen rectangle, reported by the tracker.
@@ -105,6 +109,10 @@ pub enum Message {
     FolderPicked(Option<PathBuf>),
     /// Remove the project folder at this position in the settings list.
     RemoveFolder(usize),
+    /// "Fetch all" was clicked: fetch every repo on the board in the background.
+    FetchAll,
+    /// A fetch-all finished; refresh the board so the ↓ counts reflect it.
+    Fetched(crate::fetch::FetchReport),
 }
 
 impl cosmic::Application for AppModel {
@@ -130,6 +138,7 @@ impl cosmic::Application for AppModel {
             settings: Settings::load(),
             board: Board::default(),
             refreshing: false,
+            fetching: false,
             rectangle_tracker: None,
             rectangle: Rectangle::default(),
         };
@@ -307,6 +316,42 @@ impl cosmic::Application for AppModel {
                 self.settings.remove_root(index);
                 return self.refresh();
             }
+            Message::FetchAll => {
+                // Ignore a second press while one's already running.
+                if self.fetching {
+                    return Task::none();
+                }
+                self.fetching = true;
+
+                // Fetch exactly the repos currently on the board - open ones
+                // and projects both - by their working-tree paths.
+                let dirs: Vec<PathBuf> = self
+                    .board
+                    .open
+                    .iter()
+                    .chain(self.board.projects.iter())
+                    .map(|repo| repo.workdir.clone())
+                    .collect();
+
+                return cosmic::task::future(async move {
+                    // Network + libgit2 I/O, so off the UI thread like the
+                    // status read. A panic becomes an empty report rather than
+                    // taking the applet down.
+                    let report = tokio::task::spawn_blocking(move || fetch::fetch_all(&dirs))
+                        .await
+                        .unwrap_or_default();
+                    Message::Fetched(report)
+                });
+            }
+            Message::Fetched(report) => {
+                self.fetching = false;
+                eprintln!(
+                    "branchkeeper: fetched {} of {} repos",
+                    report.succeeded, report.attempted
+                );
+                // Re-read so the freshly updated remote refs show in the ↓.
+                return self.refresh();
+            }
         }
 
         Task::none()
@@ -403,14 +448,29 @@ impl AppModel {
 
         let footer_divider = padded_control(divider::horizontal::default())
             .padding([spacing.space_xxs, spacing.space_m]);
+
+        // "Fetch all" updates every repo's remote refs so the ↓ counts are
+        // real. While it runs it reads "Fetching…" and is dead to presses
+        // (no on_press), so you can't stack a dozen fetches on one click.
+        let fetch_label = if self.fetching {
+            fl!("fetching")
+        } else {
+            fl!("fetch-all")
+        };
+        let mut fetch_button = menu_button(text(fetch_label).size(14));
+        if !self.fetching {
+            fetch_button = fetch_button.on_press(Message::FetchAll);
+        }
+
         let settings_button =
             menu_button(text(fl!("settings")).size(14)).on_press(Message::OpenSettings);
 
         // Rows carry their own horizontal padding (menu_button/padded_control),
         // so the column only pads top and bottom - the stock applets' layout.
-        column::with_capacity(3)
+        column::with_capacity(4)
             .push(list)
             .push(footer_divider)
+            .push(fetch_button)
             .push(settings_button)
             .padding([8, 0])
             .width(Length::Fill)
