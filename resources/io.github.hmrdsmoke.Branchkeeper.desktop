@@ -1,0 +1,15 @@
+[Desktop Entry]
+Name=Branchkeeper
+Comment=Git branch and sync status for the COSMIC panel
+Type=Application
+Exec=io.github.hmrdsmoke.Branchkeeper
+Icon=io.github.hmrdsmoke.Branchkeeper
+Terminal=false
+Categories=Utility;Development;X-COSMIC;
+Keywords=COSMIC;Applet;Git;Branch;Repository;
+StartupNotify=true
+NoDisplay=true
+X-CosmicApplet=true
+X-CosmicShrinkable=true
+X-CosmicHoverPopup=Auto
+X-HostWaylandDisplay=true

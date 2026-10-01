@@ -1,0 +1,113 @@
+[package]
+name        = "branchkeeper"
+version     = "0.1.0"
+edition     = "2024"
+authors     = ["Michael Van Auker (HMRDSmoke)"]
+license     = "GPL-3.0-or-later"
+description = "Git branch and sync status for the COSMIC panel"
+repository  = "https://github.com/hmrdsmoke/Branchkeeper"
+homepage    = "https://github.com/hmrdsmoke/Branchkeeper"
+readme      = "README.md"
+
+# ===========================================================================
+# DEBIAN PACKAGE — `cargo deb` (cargo-deb) builds target/debian/*.deb
+# Mirrors the Makefile install layout, under /usr (packages never touch
+# /usr/local). `$auto` fills shared-library Depends from the binary via
+# dpkg-shlibdeps (package dpkg-dev); cosmic-panel is what hosts the applet.
+# libgit2 is built into the binary (see the git2 dependency), so it never
+# shows up in Depends.
+# ===========================================================================
+[package.metadata.deb]
+section              = "utils"
+priority             = "optional"
+depends              = "$auto, cosmic-panel"
+license-file         = ["LICENSE", "0"]
+extended-description = """\
+Panel applet for the COSMIC desktop that shows the git status of whatever \
+repository you're working in. The panel shows the repo name, branch, and how \
+far ahead of or behind its upstream it is; the popup lists every repository \
+you currently have open, with its branch, sync state, and uncommitted changes."""
+assets = [
+    ["target/release/branchkeeper", "usr/bin/io.github.hmrdsmoke.Branchkeeper", "755"],
+    ["resources/io.github.hmrdsmoke.Branchkeeper.desktop", "usr/share/applications/", "644"],
+    ["resources/io.github.hmrdsmoke.Branchkeeper.metainfo.xml", "usr/share/metainfo/", "644"],
+    ["resources/icon.svg", "usr/share/icons/hicolor/scalable/apps/io.github.hmrdsmoke.Branchkeeper.svg", "644"],
+]
+
+[dependencies]
+# ── UI framework ─────────────────────────────────────────────────────────────
+# Same pin as Void Watcher 3.x and Soulless-Launcher v2.5.x. Bump all together.
+# No "dbus-config" feature yet: that's for live cosmic-config watching, and
+# Branchkeeper has no settings of its own so far. Add it with the first setting.
+cosmic = { git = "https://github.com/pop-os/libcosmic", rev = "fc5debccef41cd6bd6731cbc768cb719847d1a2f", package = "libcosmic", features = [
+    "tokio",
+    "wayland",
+    "winit",
+    "wgpu",
+    "applet",
+] }
+
+# ── Git ──────────────────────────────────────────────────────────────────────
+# libgit2 bindings. We only ever READ local repositories (branch, upstream,
+# ahead/behind, status), never fetch or push, so the network features
+# (https/ssh, which drag in OpenSSL and libssh2) are switched off.
+# vendored-libgit2 compiles libgit2 into the binary: no system libgit2 to
+# match versions with, and the same source set works for an offline flatpak
+# build later.
+git2 = { version = "0.20", default-features = false, features = ["vendored-libgit2"] }
+
+# ── Async runtime ────────────────────────────────────────────────────────────
+# libcosmic already runs on tokio (its "tokio" feature above). We depend on
+# it directly only for `spawn_blocking`, which keeps the libgit2 file I/O off
+# the UI thread each refresh.
+tokio = { version = "1", features = ["rt"] }
+
+# ── i18n ─────────────────────────────────────────────────────────────────────
+i18n-embed-fl = "0.10"
+rust-embed    = "8.7.2"
+
+[dependencies.i18n-embed]
+version  = "0.16"
+features = ["fluent-system", "desktop-requester"]
+
+# ===========================================================================
+# RELEASE PROFILE — shipped binary, fully optimized and stripped
+# Use: cargo build --release
+# ===========================================================================
+[profile.release]
+lto           = "fat"
+codegen-units = 1
+opt-level     = 3
+panic         = "abort"
+strip         = true
+
+# ===========================================================================
+# DEV RELEASE — fast compile, no LTO, for day-to-day testing
+# Use: cargo build --profile dev-release
+# ===========================================================================
+[profile.dev-release]
+inherits      = "release"
+lto           = "thin"
+codegen-units = 4
+strip         = false
+debug         = false
+
+# Uncomment to test a locally-cloned libcosmic
+# [patch.'https://github.com/pop-os/libcosmic']
+# libcosmic     = { path = "../libcosmic" }
+# cosmic-config = { path = "../libcosmic/cosmic-config" }
+# cosmic-theme  = { path = "../libcosmic/cosmic-theme" }
+
+
+# ── Offline-flatpak fix: vendor the two unpinnable cosmic-panel crates ─────────
+# cosmic-panel-config (pulled by libcosmic's `applet` feature) depends on
+# cosmic-config via a BARE git URL — no rev — which resolves to floating HEAD and
+# drags a second libcosmic rev into the tree, breaking offline vendoring and
+# builds. Same fix as Void Watcher and Soulless-Launcher: patch cosmic-panel (a
+# DIFFERENT repo, so cargo allows it) onto local vendored copies whose
+# cosmic-config is pinned to our libcosmic rev. Collapses the tree to a single
+# libcosmic (fc5debcc). The vendor/ directory is copied straight from Void
+# Watcher; keep the two in step when the pin moves.
+[patch.'https://github.com/pop-os/cosmic-panel']
+cosmic-panel-config = { path = "vendor/cosmic-panel-config" }
+xdg-shell-wrapper-config = { path = "vendor/xdg-shell-wrapper-config" }

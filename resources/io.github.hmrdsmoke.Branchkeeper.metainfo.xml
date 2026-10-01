@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.hmrdsmoke.Branchkeeper</id>
+  <name>Branchkeeper</name>
+  <summary>Git branch and sync status for the COSMIC panel</summary>
+  <developer_name>Michael Van Auker (HMRDSmoke)</developer_name>
+  <description>
+    <p>
+      Branchkeeper is a COSMIC panel applet that shows the git status of
+      whatever repository you're working in. The panel shows the repo name,
+      the checked-out branch, and how far ahead of or behind its upstream it
+      is. Click it for the full board: every repository you currently have
+      open, each with its branch, sync state, and uncommitted changes.
+    </p>
+    <p>
+      It finds your open repositories by looking at where your terminals and
+      file managers are sitting - no configuration, nothing to point it at.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.hmrdsmoke.Branchkeeper.desktop</launchable>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <url type="homepage">https://github.com/hmrdsmoke/Branchkeeper</url>
+  <url type="bugtracker">https://github.com/hmrdsmoke/Branchkeeper/issues</url>
+  <content_rating type="oars-1.1" />
+  <releases>
+    <release version="0.1.0" date="2026-10-01">
+      <description>
+        <p>Skeleton: reads branch, ahead/behind, and change count for a repository.</p>
+      </description>
+    </release>
+  </releases>
+</component>
