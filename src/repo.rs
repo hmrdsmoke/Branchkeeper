@@ -81,23 +81,19 @@ impl RepoStatus {
         self.changed > 0
     }
 
-    /// The compact ahead/behind marker: "↑2", "↓1", "↑2↓1", or empty when in
-    /// sync or there's no upstream. Pure symbols, so the panel stays short.
+    /// The ahead/behind marker: always both arrows with their counts, zeros
+    /// included (`↑0 ↓0` is a statement - it says "pushed and current").
+    /// Empty only when there's no upstream to compare against, so the arrows'
+    /// absence is itself the "never pushed" signal.
     pub fn sync_label(&self) -> String {
-        let mut label = String::new();
-        if let Some(tracking) = self.tracking {
-            if tracking.ahead > 0 {
-                label.push_str(&format!("↑{}", tracking.ahead));
-            }
-            if tracking.behind > 0 {
-                label.push_str(&format!("↓{}", tracking.behind));
-            }
+        match self.tracking {
+            Some(tracking) => format!("↑{} ↓{}", tracking.ahead, tracking.behind),
+            None => String::new(),
         }
-        label
     }
 
-    /// The panel's one-liner: `soulless main ↑2`. Name, branch, then the sync
-    /// marker only when there's something to say.
+    /// The panel's one-liner: `soulless main ↑2 ↓0`. Name, branch, then the
+    /// sync marker whenever there's an upstream.
     pub fn headline(&self) -> String {
         let sync = self.sync_label();
         if sync.is_empty() {

@@ -268,19 +268,19 @@ impl AppModel {
         }
     }
 
-    /// One row of the board. Name on the left with the ahead/behind marker on
-    /// the right, then a smaller line with the branch and the change count.
+    /// One row of the board. Top line reads like the panel - `name branch` on
+    /// the left, `↑N ↓N` on the right - then a smaller line with the change
+    /// count.
     fn repo_row<'a>(&'a self, repo: &'a RepoStatus, spacing: Spacing) -> Element<'a, Message> {
+        let title = format!("{} {}", repo.name, repo.branch);
         let top = row::with_capacity(2)
-            .push(text(repo.name.as_str()).size(14).width(Length::Fill))
+            .push(text(title).size(14).width(Length::Fill))
             .push(text(sync_detail(repo)).size(14))
             .align_y(Alignment::Center);
 
-        let detail = format!("{}  ·  {}", repo.branch, changes_detail(repo));
-
         column::with_capacity(2)
             .push(top)
-            .push(text(detail).size(12))
+            .push(text(changes_detail(repo)).size(12))
             .spacing(spacing.space_xxxs)
             .width(Length::Fill)
             .into()
@@ -311,22 +311,13 @@ impl AppModel {
     }
 }
 
-/// The popup's wording for ahead/behind: "↑2 ↓1" with zeros left out, "in
-/// sync" when both are zero, "no upstream" when there's nothing to compare to.
+/// The popup's wording for ahead/behind: the same `↑N ↓N` the panel shows,
+/// zeros included, or "no upstream" when there's nothing to compare to.
 fn sync_detail(repo: &RepoStatus) -> String {
-    match repo.tracking {
-        None => fl!("no-upstream"),
-        Some(tracking) if tracking.ahead == 0 && tracking.behind == 0 => fl!("in-sync"),
-        Some(tracking) => {
-            let mut parts = Vec::with_capacity(2);
-            if tracking.ahead > 0 {
-                parts.push(format!("↑{}", tracking.ahead));
-            }
-            if tracking.behind > 0 {
-                parts.push(format!("↓{}", tracking.behind));
-            }
-            parts.join(" ")
-        }
+    if repo.tracking.is_some() {
+        repo.sync_label()
+    } else {
+        fl!("no-upstream")
     }
 }
 
