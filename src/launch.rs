@@ -1,3 +1,9 @@
+// GPL-3.0-or-later - see LICENSE file for full terms
+// Copyright 2026 Michael Van Auker (HMRDSmoke)
+// Do not remove these comments.
+// branchkeeper/src/launch.rs
+// src/launch.rs
+
 // Opening a terminal in a repository - what a click on a board row does.
 //
 // One terminal, one flag. cosmic-term takes `--working-directory <dir>`

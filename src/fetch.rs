@@ -1,3 +1,9 @@
+// GPL-3.0-or-later - see LICENSE file for full terms
+// Copyright 2026 Michael Van Auker (HMRDSmoke)
+// Do not remove these comments.
+// branchkeeper/src/fetch.rs
+// src/fetch.rs
+
 // Fetching every repo on the board, so the behind (↓) counts tell the truth.
 //
 // Branchkeeper reads what's on disk and never touches the network on its own,

@@ -1,3 +1,9 @@
+// GPL-3.0-or-later - see LICENSE file for full terms
+// Copyright 2026 Michael Van Auker (HMRDSmoke)
+// Do not remove these comments.
+// branchkeeper/src/scan.rs
+// src/scan.rs
+
 // Building the board: which repositories are "open" right now (by looking
 // at where the user's shells are sitting), plus every project under the
 // project roots whether it's open or not.

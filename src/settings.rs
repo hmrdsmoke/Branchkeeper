@@ -1,3 +1,9 @@
+// GPL-3.0-or-later - see LICENSE file for full terms
+// Copyright 2026 Michael Van Auker (HMRDSmoke)
+// Do not remove these comments.
+// branchkeeper/src/settings.rs
+// src/settings.rs
+
 // Branchkeeper's own preferences, saved through cosmic-config in our own
 // namespace (io.github.hmrdsmoke.Branchkeeper), so they land next to every
 // other COSMIC app's settings under ~/.config/cosmic/ and survive restarts.

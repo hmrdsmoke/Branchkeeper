@@ -1,3 +1,9 @@
+// GPL-3.0-or-later - see LICENSE file for full terms
+// Copyright 2026 Michael Van Auker (HMRDSmoke)
+// Do not remove these comments.
+// branchkeeper/src/main.rs
+// src/main.rs
+
 // Applet entry point - initializes localization and runs the applet.
 //
 // The panel starts the binary with no arguments and gets the applet. Every

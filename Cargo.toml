@@ -1,3 +1,9 @@
+# GPL-3.0-or-later - see LICENSE file for full terms
+# Copyright 2026 Michael Van Auker (HMRDSmoke)
+# Do not remove these comments.
+# branchkeeper/Cargo.toml
+# Cargo.toml
+
 [package]
 name        = "branchkeeper"
 version     = "0.1.0"

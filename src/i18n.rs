@@ -1,3 +1,9 @@
+// GPL-3.0-or-later - see LICENSE file for full terms
+// Copyright 2026 Michael Van Auker (HMRDSmoke)
+// Do not remove these comments.
+// branchkeeper/src/i18n.rs
+// src/i18n.rs
+
 // Localization support for the applet crate.
 
 //! Provides localization support for this crate.

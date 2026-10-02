@@ -1,3 +1,9 @@
+// GPL-3.0-or-later - see LICENSE file for full terms
+// Copyright 2026 Michael Van Auker (HMRDSmoke)
+// Do not remove these comments.
+// branchkeeper/src/repo.rs
+// src/repo.rs
+
 // One repository's status, read with libgit2 (the `git2` crate) rather than
 // by shelling out to `git`. Everything the panel and popup show about a repo
 // comes from here: its name, the checked-out branch, how far it is ahead of or

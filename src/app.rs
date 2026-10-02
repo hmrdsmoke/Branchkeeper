@@ -1,3 +1,9 @@
+// GPL-3.0-or-later - see LICENSE file for full terms
+// Copyright 2026 Michael Van Auker (HMRDSmoke)
+// Do not remove these comments.
+// branchkeeper/src/app.rs
+// src/app.rs
+
 // COSMIC panel applet - application model, update loop, and view.
 //
 // Panel is the headline, popup is the full board. The panel button shows one
