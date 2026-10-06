@@ -31,6 +31,7 @@ use cosmic::widget::{
 };
 use cosmic::{Element, surface};
 
+use crate::actions::{self, Action};
 use crate::fetch;
 use crate::fl;
 use crate::launch;
@@ -85,6 +86,19 @@ pub struct AppModel {
     /// True while a "Fetch all" is running on the background thread. The
     /// button reads this to show "Fetching…" and ignore further presses.
     fetching: bool,
+    /// Which repo row is expanded to show its action buttons, by working-tree
+    /// path. Clicking a row toggles this; only one row is open at a time, so
+    /// the popup stays short. `None` means every row is collapsed.
+    expanded: Option<PathBuf>,
+    /// The repo a pull/push/fetch is currently running on, by path, or `None`
+    /// when nothing's in flight. One action at a time: its buttons read
+    /// "working…" and are dead to presses while this is set.
+    busy: Option<PathBuf>,
+    /// The last action's result, kept so the expanded row can show it ("pushed",
+    /// "up to date", "auth failed") until the next action or a collapse. The
+    /// path says which repo it belongs to, so a stale line never shows under the
+    /// wrong row.
+    last_action: Option<(PathBuf, actions::Outcome)>,
     /// Handle to the panel's rectangle tracker, delivered once at startup.
     rectangle_tracker: Option<RectangleTracker<u32>>,
     /// The panel button's true on-screen rectangle, reported by the tracker.
@@ -103,7 +117,15 @@ pub enum Message {
     Tick,
     /// A background read finished; this is the new board.
     Refreshed(Board),
-    /// A board row was clicked: open a terminal in that repo's directory.
+    /// A board row was clicked: expand it (or collapse it if already open) to
+    /// show that repo's action buttons.
+    ToggleExpand(PathBuf),
+    /// An action button in an expanded row was pressed: run pull/push/fetch on
+    /// that repo in the background.
+    RunAction(Action, PathBuf),
+    /// A background action finished; carries the repo it ran on and the result.
+    ActionDone(PathBuf, actions::Outcome),
+    /// The "Open terminal" button in an expanded row: open a terminal there.
     Launch(PathBuf),
     /// Open the settings screen.
     OpenSettings,
@@ -145,6 +167,9 @@ impl cosmic::Application for AppModel {
             board: Board::default(),
             refreshing: false,
             fetching: false,
+            expanded: None,
+            busy: None,
+            last_action: None,
             rectangle_tracker: None,
             rectangle: Rectangle::default(),
         };
@@ -278,9 +303,52 @@ impl cosmic::Application for AppModel {
                 self.refreshing = false;
                 self.board = board;
             }
+            Message::ToggleExpand(dir) => {
+                // Clicking the open row closes it; clicking another opens that
+                // one instead. Switching rows clears the last result so a line
+                // from one repo never lingers under another.
+                if self.expanded.as_deref() == Some(dir.as_path()) {
+                    self.expanded = None;
+                } else {
+                    self.expanded = Some(dir);
+                    self.last_action = None;
+                }
+            }
+            Message::RunAction(action, dir) => {
+                // One action at a time across the whole board; ignore a press
+                // while one's running.
+                if self.busy.is_some() {
+                    return Task::none();
+                }
+                self.busy = Some(dir.clone());
+                // Clear any previous result so the row shows "working…" cleanly.
+                self.last_action = None;
+
+                let run_dir = dir.clone();
+                return cosmic::task::future(async move {
+                    // Network + libgit2 I/O, so off the UI thread like the board
+                    // read and Fetch all. A panic becomes a worded failure
+                    // rather than taking the applet down.
+                    let outcome = tokio::task::spawn_blocking(move || actions::run(action, &run_dir))
+                        .await
+                        .unwrap_or_else(|_| actions::Outcome {
+                            ok: false,
+                            msg: fl!("action-failed"),
+                        });
+                    Message::ActionDone(dir, outcome)
+                });
+            }
+            Message::ActionDone(dir, outcome) => {
+                self.busy = None;
+                eprintln!("branchkeeper: {} -> {}", dir.display(), outcome.msg);
+                self.last_action = Some((dir, outcome));
+                // Re-read so the arrows and change count reflect what the action
+                // did (a pull moves ↓ to 0, a push moves ↑ to 0).
+                return self.refresh();
+            }
             Message::Launch(dir) => {
                 launch::terminal_in(&dir);
-                // Picking a row is a choice made; close the popup like any
+                // Opening a terminal is a choice made; close the popup like any
                 // menu would. The new shell shows up in "Open" on the next
                 // refresh, and that repo becomes the headline.
                 if let Some(id) = self.popup.take() {
@@ -530,25 +598,84 @@ impl AppModel {
             .into()
     }
 
-    /// One row of the board, as a button that opens a terminal in the repo.
-    /// Top line reads like the panel - `name branch` on the left, `↑N ↓N` on
-    /// the right - then a smaller line with the change count.
+    /// One row of the board. Collapsed, it's a button that reads like the panel
+    /// - `name branch` on the left, `↑N ↓N` on the right, a smaller change-count
+    /// line under it - and clicking it expands the row. Expanded, the same
+    /// header sits above a strip of action buttons (Pull / Push / Fetch /
+    /// Terminal) for that repo, plus a result line once an action has run.
     fn repo_row<'a>(&'a self, repo: &'a RepoStatus, spacing: Spacing) -> Element<'a, Message> {
+        let is_open = self.expanded.as_deref() == Some(repo.workdir.as_path());
+
         let title = format!("{} {}", repo.name, repo.branch);
         let top = row::with_capacity(2)
             .push(text(title).size(14).width(Length::Fill))
             .push(text(sync_detail(repo)).size(14))
             .align_y(Alignment::Center);
 
-        let content = column::with_capacity(2)
+        let header = column::with_capacity(2)
             .push(top)
             .push(text(changes_detail(repo)).size(12))
             .spacing(spacing.space_xxxs)
             .width(Length::Fill);
 
-        menu_button(content)
-            .on_press(Message::Launch(repo.workdir.clone()))
-            .into()
+        // The header is always a button; pressing it toggles this row open/shut.
+        let header_button =
+            menu_button(header).on_press(Message::ToggleExpand(repo.workdir.clone()));
+
+        if !is_open {
+            return header_button.into();
+        }
+
+        // Expanded: header, then the action strip, then (if any) a result line.
+        let busy_here = self.busy.as_deref() == Some(repo.workdir.as_path());
+        let anything_busy = self.busy.is_some();
+
+        let actions_strip = row::with_capacity(4)
+            .push(self.action_button(fl!("pull"), Action::Pull, repo, anything_busy))
+            .push(self.action_button(fl!("push"), Action::Push, repo, anything_busy))
+            .push(self.action_button(fl!("fetch"), Action::Fetch, repo, anything_busy))
+            .push(
+                // Terminal is always allowed, even mid-action: it starts a
+                // separate process and touches no git state.
+                menu_button(text(fl!("terminal")).size(14))
+                    .on_press(Message::Launch(repo.workdir.clone())),
+            )
+            .spacing(spacing.space_xxs)
+            .align_y(Alignment::Center);
+
+        let mut col = column::with_capacity(3)
+            .push(header_button)
+            .push(padded_control(actions_strip))
+            .spacing(spacing.space_xxxs)
+            .width(Length::Fill);
+
+        // A status line: "working…" while this repo's action runs, otherwise
+        // the last result IF it belongs to this repo.
+        if busy_here {
+            col = col.push(padded_control(text(fl!("working")).size(12)));
+        } else if let Some((path, outcome)) = &self.last_action {
+            if path.as_path() == repo.workdir.as_path() {
+                col = col.push(padded_control(text(outcome.msg.clone()).size(12)));
+            }
+        }
+
+        col.into()
+    }
+
+    /// One action button in an expanded row. Disabled (no on_press) while any
+    /// action is running anywhere, so you can't stack a pull on a push.
+    fn action_button<'a>(
+        &self,
+        label: String,
+        action: Action,
+        repo: &RepoStatus,
+        anything_busy: bool,
+    ) -> Element<'a, Message> {
+        let mut b = menu_button(text(label).size(14));
+        if !anything_busy {
+            b = b.on_press(Message::RunAction(action, repo.workdir.clone()));
+        }
+        b.into()
     }
 
     /// Vertical panels get the headline one word per line, the way Void

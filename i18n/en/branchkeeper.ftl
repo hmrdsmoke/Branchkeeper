@@ -15,3 +15,11 @@ add-folder = Add folder…
 pick-folder = Choose a project folder
 fetch-all = Fetch all
 fetching = Fetching…
+
+# Per-repo actions (expanded row)
+pull = Pull
+push = Push
+fetch = Fetch
+terminal = Terminal
+working = working…
+action-failed = failed

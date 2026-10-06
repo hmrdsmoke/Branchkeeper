@@ -24,6 +24,7 @@
 // only trigger on the exact flags; anything else is ignored and the applet
 // starts normally.
 
+mod actions;
 mod app;
 mod fetch;
 mod i18n;
